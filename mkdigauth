@@ -1,0 +1,235 @@
+#!/bin/sh
+# mkdigauth
+# https://github.com/remino/mkdigauth
+
+VERSION='1.0.0'
+
+mkdigauth_main() {
+	trap _exit INT TERM
+
+	e_args=16
+
+	scriptinv="$( basename "$0" )"
+	scriptpath="$( readlink -f "$0" )"
+	scriptname="$( basename "$scriptpath" )"
+
+	DEFAULT_REALM='Access'
+	DEFAULT_USER='user'
+
+	clear_files=0
+	generate_password=1
+	htdigest_base=
+	no_htaccess=0
+	password=
+	realm="$DEFAULT_REALM"
+	show_password=1
+	user="$DEFAULT_USER"
+
+	while getopts a:chp:r:sTu:v opt
+	do
+		case $opt in
+			a) htdigest_base="$OPTARG" ;;
+			c) clear_files=1 ;;
+			h) cmd=help ;;
+			p) generate_password=0; show_password=0; password="$OPTARG" ;;
+			r) realm="$OPTARG" ;;
+			s) show_password=1 ;;
+			T) no_htaccess=1 ;;
+			u) user="$OPTARG" ;;
+			v) cmd=version ;;
+			*) _invalid_opt ;;
+		esac
+	done
+
+	shift "$(( OPTIND - 1 ))"
+
+	[ -z "$cmd" ] && cmd="generate"
+
+	case "$cmd" in
+		help|generate|version) "mkdigauth_$cmd" "$@" ;;
+		*) _invalid_cmd ;;
+	esac
+
+	_exit
+}
+
+mkdigauth_help() {
+cat <<USAGE
+$scriptname $VERSION
+
+USAGE: $scriptinv [-ahprtuv] [<outputdir>]
+
+Create digest auth .htdigest file for Apache HTTPd with related .htaccess file.
+
+Will output to current directory if no outputdir is specified.
+
+OPTIONS:
+
+	-a        Specify absolute path base to .htdigest file to use.
+	          Path will become <pathbase>/<outputdir>/.htdigest.
+	          If not specified, will only <outputdir>/.htdigest.
+	          (Note AuthUserFile in .htdigest cannot be relative.)
+	-c        Clear all output files in <outputdir> before processing.
+	-h        Show this help screen.
+	-p        Specify password instead of generating one.
+	-r        Specify realm. (Default: $DEFAULT_REALM)
+	-s        Show password on report.
+	-T        Omit .htaccess file.
+	-u        Specify username. (Default: $DEFAULT_USER)
+	-v        Show script name and version number.
+
+USAGE
+}
+
+mkdigauth_generate() {
+	outputdir="$1"
+	[ -z "$1" ] && outputdir=""
+	[ -n "$outputdir" ] && outputdir="$( echo "$outputdir" | sed -E 's/\/$//' )/"
+
+	[ -z "$title" ] && title="$1"
+	[ -z "$realm" ] && realm="$title"
+	[ -n "$htdigest_base" ] && htdigest_base="$htdigest_base/"
+	[ -d "$outputdir" ] || [ -n "$outputdir" ] && mkdir -p "$outputdir"
+
+	[ $clear_files -ne 0 ] && printf '' > "${outputdir}.htdigest"
+
+	htdigest_file="${outputdir}.htdigest"
+	htdigest_path="${htdigest_base}${htdigest_file}"
+
+	_htdigest "$realm" "$user" "$password" >> "$htdigest_file"
+
+	if [ $no_htaccess -eq 0 ]
+	then
+		[ $clear_files -ne 0 ] && printf '' > "${outputdir}.htaccess"
+		htaccess_path="${outputdir}.htaccess"
+		_htaccess "$htdigest_path" "$realm" >> "$htaccess_path"
+	else
+		htaccess_path=""
+	fi
+
+	visible_password="$( ( [ $show_password -ne 0 ] && _echo "$password" ) || _echo '********' )"
+	visible_creds="$( _echo "$user:$realm:$visible_password" )"
+	_echo "$visible_creds $htdigest_file $htaccess_path"
+}
+
+mkdigauth_version() {
+	_echo "$scriptname $VERSION"
+}
+
+_echo() {
+	echo "$@"
+}
+
+_error() {
+	_echo "$@" >&2
+}
+
+_exit() {
+	exit_code=$?
+	exit $exit_code
+}
+
+_fatal() {
+	exit_code="$1"
+	shift
+	_error "$@"
+	exit "$exit_code"
+}
+
+_htaccess() {
+	[ -z "$1" ] && _missing_arg "htdigest_path"
+	[ -z "$2" ] && _missing_arg "realm"
+
+cat <<HTACCESS
+AuthType Digest
+AuthName "$2"
+AuthUserFile "$1"
+Require valid-user
+HTACCESS
+}
+
+_htdigest() {
+	password="$3"
+
+	[ -z "$1" ] && _missing_arg "realm"
+	[ -z "$2" ] && _missing_arg "user"
+
+	if [ -z "$password" ]
+	then
+		if [ $generate_password -ne 0 ]
+		then
+			password="$( _password_generate )"
+		else
+			password="$( _password_input )"
+		fi
+	fi
+
+	digest="$(
+		printf "%s:%s:%s" "$2" "$1" "$password" \
+			| md5sum | awk '{print $1}'
+	)"
+
+	printf "%s:%s:%s\n" "$2" "$1" "$digest"
+}
+
+_invalid_cmd() {
+	_error "Invalid command: $cmd"
+	_echo
+	mkdigauth_help
+	exit $e_args
+}
+
+_invalid_opt() {
+	_error "Invalid option: $opt"
+	_echo
+	mkdigauth_help
+	exit $e_args
+}
+
+_missing_arg() {
+	_fatal $e_args "Missing argument: $1. See '$scriptinv -h' for details."
+}
+
+_password_input() {
+	exec < /dev/tty || exit
+
+	tty_settings=$(stty -g) || exit
+
+	trap 'stty "$tty_settings"' EXIT INT TERM
+
+	stty -echo || exit
+
+	printf "Password: " > /dev/tty
+
+	IFS= read -r password
+	ret=$?
+
+	echo > /dev/tty
+
+	printf '%s' "$password"
+	return "$ret"
+}
+
+_password_generate() {
+	newpwd=
+
+	while ! _password_valid "$newpwd"
+	do
+		newpwd="$( < /dev/urandom LC_ALL=C tr -dc A-Za-z0-9 | head -c 8 )"
+	done
+
+	echo "$newpwd"
+}
+
+_password_valid() {
+	[ -z "$1" ] && return 1
+
+	for pattern in '^.{8,}$' '[a-z]' '[A-Z]' '[0-9]'
+	do
+		( ! ( echo "$1" | grep -Eq "$pattern" ) ) && return 1
+	done
+
+	return 0
+}
+
+mkdigauth_main "$@"
