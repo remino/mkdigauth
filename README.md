@@ -54,7 +54,7 @@ chmod +x mkdigauth
 ```
 mkdigauth 1.0.0
 
-USAGE: mkdigauth [-ahprtuv] [<outputdir>]
+USAGE: mkdigauth [<options>] [<outputdir>]
 
 Create digest auth .htdigest file for Apache HTTPd with related .htaccess file.
 
@@ -69,7 +69,7 @@ OPTIONS:
 	-c        Clear all output files in <outputdir> before processing.
 	-h        Show this help screen.
 	-p        Specify password instead of generating one.
-	-r        Specify realm. (Default: Access)
+	-r        Specify realm. (Defaults to name of directory or Access)
 	-s        Show password on report.
 	-T        Omit .htaccess file.
 	-u        Specify username. (Default: user)

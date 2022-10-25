@@ -21,7 +21,7 @@ mkdigauth_main() {
 	htdigest_base=
 	no_htaccess=0
 	password=
-	realm="$DEFAULT_REALM"
+	realm=
 	show_password=1
 	user="$DEFAULT_USER"
 
@@ -57,7 +57,7 @@ mkdigauth_help() {
 cat <<USAGE
 $scriptname $VERSION
 
-USAGE: $scriptinv [-ahprtuv] [<outputdir>]
+USAGE: $scriptinv [<options>] [<outputdir>]
 
 Create digest auth .htdigest file for Apache HTTPd with related .htaccess file.
 
@@ -72,7 +72,7 @@ OPTIONS:
 	-c        Clear all output files in <outputdir> before processing.
 	-h        Show this help screen.
 	-p        Specify password instead of generating one.
-	-r        Specify realm. (Default: $DEFAULT_REALM)
+	-r        Specify realm. (Defaults to name of directory or $DEFAULT_REALM)
 	-s        Show password on report.
 	-T        Omit .htaccess file.
 	-u        Specify username. (Default: $DEFAULT_USER)
@@ -87,7 +87,8 @@ mkdigauth_generate() {
 	[ -n "$outputdir" ] && outputdir="$( echo "$outputdir" | sed -E 's/\/$//' )/"
 
 	[ -z "$title" ] && title="$1"
-	[ -z "$realm" ] && realm="$title"
+	[ -z "$realm" ] && realm="$( basename "$( readlink -f "$outputdir" )" )"
+	[ -z "$realm" ] && realm="$DEFAULT_REALM"
 	[ -n "$htdigest_base" ] && htdigest_base="$htdigest_base/"
 	[ -d "$outputdir" ] || [ -n "$outputdir" ] && mkdir -p "$outputdir"
 
