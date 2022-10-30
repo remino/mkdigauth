@@ -2,7 +2,7 @@
 # mkdigauth
 # https://github.com/remino/mkdigauth
 
-VERSION='1.1.0'
+VERSION='1.1.1'
 
 mkdigauth_main() {
 	trap _exit INT TERM

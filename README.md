@@ -52,7 +52,7 @@ chmod +x mkdigauth
 ## Usage
 
 ```
-mkdigauth 1.1.0
+mkdigauth 1.1.1
 
 USAGE: mkdigauth [<options>] [<outputdir>]
 
