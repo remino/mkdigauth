@@ -87,7 +87,7 @@ mkdigauth_generate() {
 	[ -n "$outputdir" ] && outputdir="$( echo "$outputdir" | sed -E 's/\/$//' )/"
 
 	[ -z "$title" ] && title="$1"
-	[ -z "$realm" ] && realm="$( basename "$( readlink -f "$outputdir" )" )"
+	[ -z "$realm" ] && realm="$( basename "$( readlink -f "${outputdir}." )" )"
 	[ -z "$realm" ] && realm="$DEFAULT_REALM"
 	[ -n "$htdigest_base" ] && htdigest_base="$htdigest_base/"
 	[ -d "$outputdir" ] || [ -n "$outputdir" ] && mkdir -p "$outputdir"
